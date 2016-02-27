@@ -1,4 +1,4 @@
-function [q_modified,omega_modified,omega_dot_modified]=attitudeExclusionR2(q,omega,omega_dot,R,V,r,v)
+function [q_modified,omega_modified,omega_dot_modified]=attitudeExclusionR2(q,omega,omega_dot,R,V,r,v, sunVec,YdirectionPrev,Ym_prev)
 %Attitude Exclusion Algorithm
 
 rho = r - R;
@@ -9,26 +9,73 @@ i_z = rho/norm(rho); % Line of Sight Direction (cameras)
 i_w = omega/norm(omega); % Direction of LOS Angular rate
 i_y = cross(i_z,i_w); % Third Triad Direction (solar panels)
 A_targeter=q2a(q);
-
+boresightVec=A_targeter*i_z;
 
 %Step 415-Determine axis of rotation between commanded boresight vector
 %and sun vector
-
+aHat=cross(sunVec,boresightVec)/norm(cross(sunVec,boresightVec));
 
 %Step 420- Calculate commanded cross-boresight angluar rate
-
+omegaCross=omega-boresightVec*dot(boresightVec,omegaBody);
+omegaCrossHat=omegaCross/norm(omegaCross);
 
 %Step 425- Calculate y direction
+Y=aHat-omegaCrossHat*dot(aHat,omegaCrossHat);
+Ydirection=Y/norm(Y);
+
 %Step 430- Prevent direction from reversing
-if 
+if (dot(Ydirection,YdirectionPrev)<0)
+    Ydirection=-Ydirection;
 end
 
-%Step 435- Define maximum delta y for time step and prevent rotation by 
-%more than allowed amount
-
-    
 %Step 440- Calculate current target tracking pointing y coordinate Y0
+omega_i=cross(boresightVec, Ydirection);
+i=cross(cross(omega_i,sunVec),omega_i);
+iHat=i/norm(i);
+if (dot(iHat,sunVec)<0)
+    iHat=-iHat;
+end
+Y0=acos(dot(iHat,sunVec));
+if (dot(cross(omega_i,iHat),cross(iHat,sunVec)))
+    Y0=-Y0;
+end
 
+%Step 445- If Y0 is greater than exclusion zone radius, no modification is
+%necessary.
+if Y0<r
+    %Step 452- if the target-tracking pointing is outside of the exclusion 
+    %zone, and is moving away from the exclusion zone, and an avoidance 
+    %maneuver is not currently underway , no modification. If not, go to
+    %step 454.
+    if dot(boresightVec-sunVec,omega)<0 && dot(Ydirection,YdirectionPrev)<0
+        %Step 450- No Modification Necessary
+        disp('No modification necessary')
+        q_modified=0;
+        Yrate=0;
+    else
+        %Step 454- If the target-tracking pointing is outside of the
+        %exclusion zone and is moving away from the exclusion zone, then
+        %go to step 458. If not,go to 462.
+        if dot(boresightVec-sunVec,omega)<0
+            
+        else
+            
+        end
+    end
+    
+else
+    %Step 450- No Modification Necessary
+    disp('No modification necessary');
+    q_modified=0;
+    Yrate=0;
+end
+
+%% Broken Beyond this Line (Probably broken above this line as well)
+
+% %Step 435- Define maximum delta y for time step and prevent rotation by 
+% %more than allowed amount
+% 
+% 
 % %Step 445- If Y0 is greater than exclusion zone radius, no modification is
 % %necessary.
 % if Y0<r
@@ -36,7 +83,7 @@ end
 %     %zone, and is moving away from the exclusion zone, and an avoidance 
 %     %maneuver is not currently underway , no modification. If not, go to
 %     %step 454.
-%     sunBoresightAngle=acos(dot(boresightVec,sunVec_sunSensor)/(norm(sunVec_sunSensor)*norm(boresightVec)));
+%     sunBoresightAngle=acos(dot(boresightVec,sunVec)/(norm(sunVec)*norm(boresightVec)));
 %     if  sunBoresightAngle>r && sunBoresightAngle>sunBoresightAnglePrev && dot(Ydirection,YdirectionPrev)<0
 %         %Step 450- No Modification Necessary
 %         disp('No modification necessary')
@@ -45,7 +92,7 @@ end
 %     else
 %         %Step 454- If the target-tracking pointing is outside of the
 %         %exclusion zone and is moving away from the exclusion zone, then
-%         %got to step 458. If not,go to 462.
+%         %go to step 458. If not,go to 462.
 %         if sunBoresightAngle>r && sunBoresightAngle>sunBoresightAnglePrev
 %             %Step 458/460/466- Apply first step of 1-D slew profiler to return 
 %             %boresight to target tracking as quickly as possible. Apply 3rd
